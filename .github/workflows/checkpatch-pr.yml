@@ -1,13 +1,18 @@
 name: checkpatch review
 on: [pull_request]
+
+permissions: read-all
+
 jobs:
   my_review:
     name: checkpatch review
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
     - name: 'Calculate PR commits + 1'
       run: echo "PR_FETCH_DEPTH=$(( ${{ github.event.pull_request.commits }} + 1 ))" >> $GITHUB_ENV
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: ${{ env.PR_FETCH_DEPTH }}
@@ -19,7 +24,7 @@ jobs:
           -o $GITHUB_WORKSPACE/spelling.txt
         chmod +x $GITHUB_WORKSPACE/checkpatch.pl
     - name: Run checkpatch review
-      uses: webispy/checkpatch-action@v9
+      uses: webispy/checkpatch-action@58374fe5bb03358b23d3d6871e2ff290ce77fcd2 # v9
       env:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         CHECKPATCH_COMMAND: ./checkpatch.pl --no-tree
