@@ -91,25 +91,6 @@ const struct ipu7_isys_pixelformat ipu7_isys_pfmts[] = {
 	 IPU_INSYS_FRAME_FORMAT_RGBA888},
 };
 
-static int video_open(struct file *file)
-{
-#ifdef CONFIG_VIDEO_INTEL_IPU7_ISYS_RESET
-	struct ipu7_isys_video *av = video_drvdata(file);
-	struct ipu7_isys *isys = av->isys;
-	struct ipu7_bus_device *adev = isys->adev;
-
-	mutex_lock(&isys->reset_mutex);
-	if (isys->need_reset) {
-		mutex_unlock(&isys->reset_mutex);
-		dev_warn(&adev->auxdev.dev, "isys power cycle required\n");
-		return -EIO;
-	}
-	mutex_unlock(&isys->reset_mutex);
-
-#endif
-	return v4l2_fh_open(file);
-}
-
 #ifdef CONFIG_VIDEO_INTEL_IPU7_ISYS_RESET
 static int video_release(struct file *file)
 {
@@ -507,6 +488,8 @@ static int start_stream_firmware(struct ipu7_isys_video *av,
 	if (!msg)
 		return -ENOMEM;
 
+	msg->stream_id = stream->stream_handle;
+
 	stream_cfg = &msg->fw_msg.stream;
 	stream_cfg->port_id = stream->stream_source;
 	stream_cfg->vc = stream->vc;
@@ -563,6 +546,7 @@ static int start_stream_firmware(struct ipu7_isys_video *av,
 		ret = -ENOMEM;
 		goto out_put_stream_opened;
 	}
+	msg->stream_id = stream->stream_handle;
 	buf = &msg->fw_msg.frame;
 
 	ipu7_isys_buffer_to_fw_frame_buff(buf, stream, bl);
@@ -862,6 +846,7 @@ int ipu7_isys_video_set_streaming(struct ipu7_isys_video *av, int state,
 	struct media_pad *r_pad;
 	struct v4l2_subdev *sd;
 	u32 r_stream = 0;
+	u16 stream_id = stream->stream_handle;
 	int ret = 0;
 
 	dev_dbg(dev, "set stream: %d\n", state);
@@ -886,6 +871,7 @@ int ipu7_isys_video_set_streaming(struct ipu7_isys_video *av, int state,
 		}
 
 		close_streaming_firmware(av);
+		ipu7_cleanup_fw_msg_bufs_by_stream_id(av->isys, stream_id);
 	} else {
 		ret = start_stream_firmware(av, bl);
 		if (ret) {
@@ -942,7 +928,7 @@ static const struct v4l2_file_operations isys_fops = {
 	.poll = vb2_fop_poll,
 	.unlocked_ioctl = video_ioctl2,
 	.mmap = vb2_fop_mmap,
-	.open = video_open,
+	.open = v4l2_fh_open,
 #ifdef CONFIG_VIDEO_INTEL_IPU7_ISYS_RESET
 	.release = video_release,
 #else
